@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convoluciones Chidas</title>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="resultados"></div> <!-- Aquí se mostrarán los canvas con cada filtro -->
+
+    <script type="text/javascript">
+
+        var image = new Image(); 
+        image.onload = imageLoaded;
+        image.src = "chai.jpg";
+
+        function imageLoaded() {
+            var canvas = document.getElementById("canvas");
+            var ctx = canvas.getContext("2d");
+
+            canvas.width = image.width;
+            canvas.height = image.height;
+
+            ctx.drawImage(image, 0, 0, image.width, image.height);
+
+            blancoNegro(canvas);
+
+            convolucionar(canvas);
+        }
+
+        function blancoNegro(canvas) {
+            var ctx = canvas.getContext("2d");
+            var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            var pixeles = imgData.data;
+
+            for (var p = 0; p < pixeles.length; p += 4) {
+                var rojo = pixeles[p];
+                var verde = pixeles[p + 1];
+                var azul = pixeles[p + 2];
+                var gris = (rojo + verde + azul) / 3;
+
+                pixeles[p] = gris;
+                pixeles[p + 1] = gris;
+                pixeles[p + 2] = gris;
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        function convolucionar(canvasFuente) {
+            var filtrosSobel = [
+                [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],  // Sobel Vertical
+                [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],  // Sobel Horizontal
+                [[-2, -1, 0], [-1, 0, 1], [0, 1, 2]],  // Diagonal 1
+                [[0, 1, 2], [-1, 0, 1], [-2, -1, 0]],  // Diagonal 2
+                [[1, 2, 1], [2, -4, 2], [1, 2, 1]],    // Enfoque 1
+                [[0, 0, 0], [0, 1, 0], [0, 0, 0]],    // Identidad
+                [[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]], // Detección de bordes
+                [[1, 1, 1], [1, -7, 1], [1, 1, 1]],    // Borde fuerte
+                [[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]],  // Lineas verticales
+                [[-1, -1, -1], [0, 0, 0], [1, 1, 1]],  // Lineas horizontales
+                [[0, 1, 0], [1, -4, 1], [0, 1, 0]],    // Enfoque 2
+                [[-2, -1, 0], [-1, 1, 1], [0, 1, 2]],  // Diagonal invertida
+                [[-1, 2, -1], [0, 0, 0], [1, -2, 1]],  // Diagonal opuesta
+                [[2, -1, -1], [-1, 0, -1], [-1, -1, 2]], // Enfoque modificado
+                [[0, 1, 2], [0, 0, 0], [-2, -1, 0]],   // Borde invertido
+                [[0, 2, 0], [2, -8, 2], [0, 2, 0]],    // Alta definición
+                [[1, -2, 1], [2, -4, 2], [1, -2, 1]],  // Sobel negativo
+                [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],  // Borde horizontal modificado
+                [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],  // Sobel original duplicado
+                [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],  // Otro filtro Sobel
+            ];
+
+            // Creamos un canvas por cada filtro y lo añadimos a la página
+            filtrosSobel.forEach(function (kernel, index) {
+                var resultadoDiv = document.getElementById("resultados");
+
+                // Crear un nuevo canvas
+                var nuevoCanvas = document.createElement("canvas");
+                nuevoCanvas.width = canvasFuente.width;
+                nuevoCanvas.height = canvasFuente.height;
+                resultadoDiv.appendChild(nuevoCanvas);
+
+                // Aplicar el filtro al nuevo canvas
+                aplicarFiltro(canvasFuente, nuevoCanvas, kernel, index);
+            });
+        }
+
+        function aplicarFiltro(canvasFuente, canvasDestino, kernel, index) {
+            var ctxFuente = canvasFuente.getContext("2d");
+            var imgDataFuente = ctxFuente.getImageData(0, 0, canvasFuente.width, canvasFuente.height);
+            var pixelesFuente = imgDataFuente.data;
+
+            var ctxDestino = canvasDestino.getContext("2d");
+            var imgDataDestino = ctxDestino.getImageData(0, 0, canvasDestino.width, canvasDestino.height);
+            var pixelesDestino = imgDataDestino.data;
+
+            for (var y = 1; y < canvasFuente.height - 1; y++) {
+                for (var x = 1; x < canvasFuente.width - 1; x++) {
+                    var idx = ((y * canvasFuente.width) + x) * 4;
+
+                    var totalR = 0, totalG = 0, totalB = 0;
+
+                    for (var ky = 0; ky < 3; ky++) {
+                        for (var kx = 0; kx < 3; kx++) {
+                            var pixelIdx = (((y + (ky - 1)) * canvasFuente.width) + (x + (kx - 1))) * 4;
+
+                            totalR += kernel[ky][kx] * pixelesFuente[pixelIdx];
+                            totalG += kernel[ky][kx] * pixelesFuente[pixelIdx + 1];
+                            totalB += kernel[ky][kx] * pixelesFuente[pixelIdx + 2];
+                        }
+                    }
+
+                    var mag = Math.sqrt((totalR * totalR) + (totalG * totalG) + (totalB * totalB));
+                    mag = (mag < 100) ? 0 : mag;  
+
+                    pixelesDestino[idx] = mag;
+                    pixelesDestino[idx + 1] = mag;
+                    pixelesDestino[idx + 2] = mag;
+                    pixelesDestino[idx + 3] = 255; // Alpha
+                }
+            }
+
+            ctxDestino.putImageData(imgDataDestino, 0, 0);
+        }
+
+    </script>
+</body>
+
+</html>
